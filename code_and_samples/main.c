@@ -37,6 +37,7 @@ void erode(unsigned char in[BMP_WIDTH][BMP_HEIGTH], unsigned char out[BMP_WIDTH]
   {
     for (int y = 0; y < BMP_HEIGTH; y++)
     {
+      //Makes sure to stay within bounds
       int left  = (x > 0) ? in[x-1][y] : 0;
       int right = (x < BMP_WIDTH-1) ? in[x+1][y] : 0;
       int up    = (y > 0) ? in[x][y-1] : 0;
@@ -51,6 +52,7 @@ void erode(unsigned char in[BMP_WIDTH][BMP_HEIGTH], unsigned char out[BMP_WIDTH]
   }
 }
 
+//Draws cross
 void cross(int x, int y) {
   for (int l = -8; l < 8; l++) {
     if (x+l > 0 && x+l < BMP_WIDTH) {
@@ -68,6 +70,7 @@ void cross(int x, int y) {
   }
 }
 
+
 void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
   int detection_length = 14;
   int toppoint = 0;
@@ -79,15 +82,14 @@ void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
 
 
   while (1) {
-  //for (int t = 0; t < 50; t++) {
     for (int x = rightpoint; x < (rightpoint + detection_length); x++) {
       for (int y = toppoint; y < (toppoint + detection_length); y++) {
-        //printf("%d, %d\n", x, y);
         if (in[x][y]) {
           detected = 1;
           end_checker = 0;
         }
 
+        //Exclution-frame
         if ((x == rightpoint || x == rightpoint + detection_length-1 || y == toppoint || y == toppoint + detection_length-1) && in[x][y]) {
           exclude = 1;
           end_checker = 0;
@@ -99,10 +101,9 @@ void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
       }
     }
 
+    //Draw black square over detected element
     if (!exclude && detected) {
       //change arrays bits within detection_length to 0000
-      //printf("Rightpoint: %d, Toppoint: %d\n", rightpoint, toppoint);
-      
       for (int k = rightpoint; k < rightpoint + detection_length; k++) {
         memset(in[k] + toppoint, 0, (detection_length+2)*sizeof(unsigned char));
       }
@@ -112,19 +113,20 @@ void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
       (*count)++;
     }
 
-
+    //Checks if detecter is at the end.
     if (toppoint == BMP_HEIGTH - detection_length && rightpoint == BMP_WIDTH - detection_length) {
-      //printf("Break at (%d, %d)\n", rightpoint, toppoint);
+      //Ends program if there were no white pixels
       if (end_checker) {
         *end = 0;
       }
       break;
     }
 
+    //Goes down 1 step if detection-square is all the way to the right
     if (rightpoint >= BMP_WIDTH - detection_length) {
       rightpoint = 0;
       toppoint += 1;
-    } else if (exclude == 0 && detected == 0) {
+    } else if (exclude == 0 && detected == 0) { //if no white detected within square, jump a squares distance.
       rightpoint = ((rightpoint + detection_length) > (BMP_WIDTH - detection_length)) ? (BMP_WIDTH - detection_length) : (rightpoint + (detection_length/2)); 
     } else {
       rightpoint += 1;
@@ -137,13 +139,13 @@ void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
 
 
 
-void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
+void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char in[BMP_WIDTH][BMP_HEIGTH]) {
   for (int x = 0; x < BMP_WIDTH; x++)
   {
     for (int y = 0; y < BMP_HEIGTH; y++)
     {
       for (int c = 0; c < BMP_CHANNELS; c++) {
-        output_image[x][y][c] = array_2d1[x][y];
+        output_image[x][y][c] = in[x][y];
       }
     }
   }
@@ -209,7 +211,7 @@ int main(int argc, char** argv)
     test_amount++; 
   }
   
-  
+  //Bug testing
   if (test_amount % 2 == 0) {
     get_output_image(output_image, array_2d1);
   } else {
