@@ -7,17 +7,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "cbmp.h"
+#include <string.h>
 
+unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
+unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
 unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH];
 unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH];
-
-unsigned char binary_threshold(unsigned char gray_px, unsigned char threshold) {
-  if (gray_px >= threshold) {
-    return 255;
-  } else {
-    return 0;
-  }
-}
 
 void black_n_white(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH]) {
   unsigned char th = 90;
@@ -37,66 +32,110 @@ void black_n_white(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS
   }
 }
 
-void erode1(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH]) {
+void erode(unsigned char in[BMP_WIDTH][BMP_HEIGTH], unsigned char out[BMP_WIDTH][BMP_HEIGTH]) {
   for (int x = 0; x < BMP_WIDTH; x++)
   {
     for (int y = 0; y < BMP_HEIGTH; y++)
     {
-      int left  = (x > 0) ? array_2d1[x-1][y] : 0;
-      int right = (x < BMP_WIDTH-1) ? array_2d1[x+1][y] : 0;
-      int up    = (y > 0) ? array_2d1[x][y-1] : 0;
-      int down  = (y < BMP_HEIGTH-1) ? array_2d1[x][y+1] : 0;
+      int left  = (x > 0) ? in[x-1][y] : 0;
+      int right = (x < BMP_WIDTH-1) ? in[x+1][y] : 0;
+      int up    = (y > 0) ? in[x][y-1] : 0;
+      int down  = (y < BMP_HEIGTH-1) ? in[x][y+1] : 0;
       
-      if (array_2d1[x][y] && left && right && up && down) {
-        array_2d2[x][y] = 255;
+      if (in[x][y] && left && right && up && down) {
+        out[x][y] = 255;
       } else {
-        array_2d2[x][y] = 0;
+        out[x][y] = 0;
       }
     }
   }
 }
 
-void erode2(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH], int *count) {
-  for (int x = 0; x < BMP_WIDTH; x++)
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++)
-    {
-      int left  = (x > 0) ? array_2d2[x-1][y] : 0;
-      int right = (x < BMP_WIDTH-1) ? array_2d2[x+1][y] : 0;
-      int up    = (y > 0) ? array_2d2[x][y-1] : 0;
-      int down  = (y < BMP_HEIGTH-1) ? array_2d2[x][y+1] : 0;
-      
-      if (array_2d2[x][y] && left && right && up && down) {
-        array_2d1[x][y] = 255;
-      } 
-      else if (array_2d2[x][y] && !left && !right && !up && !down) 
-      {
-        array_2d1[x][y] = 0;
-        (*count)++;
-      } else {
-        array_2d1[x][y] = 0;
-      }
+void cross(int x, int y) {
+  for (int l = -8; l < 8; l++) {
+    if (x+l > 0 && x+l < BMP_WIDTH) {
+      input_image[x+l][y][0] = 255;
+      input_image[x+l][y][1] = 0;
+      input_image[x+l][y][2] = 0;
+    }
+  }
+  for (int v = -8; v < 8; v++) {
+    if (y+v > 0 && y+v < BMP_HEIGTH) {
+      input_image[x][y+v][0] = 255;
+      input_image[x][y+v][1] = 0;
+      input_image[x][y+v][2] = 0;
     }
   }
 }
 
-void detection(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
-  int detection_width = 12+2;
-  int detection_height = 12+2;
-  int c = 0;
+void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
+  int detection_length = 14;
+  int toppoint = 0;
+  int rightpoint = 0;
 
-  
-  
-  for (int x = 0+c; x < BMP_WIDTH-detection_width; x++) {
-    for (int y = 0+c; y < BMP_HEIGTH-detection_height; y++) {
-      for (int w = x; w < 14+x; w++) {
-        for (int h = y; h < 14+y; w++) {
-          if (h == x && array_2d1[])
+  int exclude = 0;
+  int detected = 0;
+  int end_checker = 1;
+
+
+  while (1) {
+  //for (int t = 0; t < 50; t++) {
+    for (int x = rightpoint; x < (rightpoint + detection_length); x++) {
+      for (int y = toppoint; y < (toppoint + detection_length); y++) {
+        //printf("%d, %d\n", x, y);
+        if (in[x][y]) {
+          detected = 1;
+          end_checker = 0;
+        }
+
+        if ((x == rightpoint || x == rightpoint + detection_length-1 || y == toppoint || y == toppoint + detection_length-1) && in[x][y]) {
+          exclude = 1;
+          end_checker = 0;
+          break;
         }
       }
+      if (exclude) {
+        break;
+      }
     }
+
+    if (!exclude && detected) {
+      //change arrays bits within detection_length to 0000
+      //printf("Rightpoint: %d, Toppoint: %d\n", rightpoint, toppoint);
+      
+      for (int k = rightpoint; k < rightpoint + detection_length; k++) {
+        memset(in[k] + toppoint, 0, (detection_length+2)*sizeof(unsigned char));
+      }
+      
+      cross(rightpoint+(detection_length/2), toppoint+(detection_length/2));
+
+      (*count)++;
+    }
+
+
+    if (toppoint == BMP_HEIGTH - detection_length && rightpoint == BMP_WIDTH - detection_length) {
+      //printf("Break at (%d, %d)\n", rightpoint, toppoint);
+      if (end_checker) {
+        *end = 0;
+      }
+      break;
+    }
+
+    if (rightpoint >= BMP_WIDTH - detection_length) {
+      rightpoint = 0;
+      toppoint += 1;
+    } else if (exclude == 0 && detected == 0) {
+      rightpoint = ((rightpoint + detection_length) > (BMP_WIDTH - detection_length)) ? (BMP_WIDTH - detection_length) : (rightpoint + (detection_length/2)); 
+    } else {
+      rightpoint += 1;
+    }
+
+    exclude = 0;
+    detected = 0;
   }
 }
+
+
 
 void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
   for (int x = 0; x < BMP_WIDTH; x++)
@@ -109,9 +148,9 @@ void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHAN
     }
   }
 }
+
   //Declaring the array to store the image (unsigned char = unsigned 8 bit)
-  unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
-  unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
+
 
 //Main function
 int main(int argc, char** argv)
@@ -141,23 +180,49 @@ int main(int argc, char** argv)
 
   //Erode image
   int count = 0;
+  int end = 1;
+  int test_amount = 0;
 
-  for (int test = 0; test < 12; test++) {
+  /* 
+  test_amount = 11;
+  
+  for (int test = 0; test < test_amount; test++) {
     if (test % 2 == 0) {
-      erode1(array_2d1, array_2d2);
+      erode(array_2d1, array_2d2);
+      detection(array_2d2, &count);
     }
     else {
-      erode2(array_2d1, array_2d2, &count);
+      erode(array_2d2, array_2d1);
+      detection(array_2d1, &count);
     }
+  }*/
+
+  while (end) {
+    if (test_amount % 2 == 0) {
+      erode(array_2d1, array_2d2);
+      detection(array_2d2, &count, &end);
+    }
+    else {
+      erode(array_2d2, array_2d1);
+      detection(array_2d1, &count, &end);
+    }
+    test_amount++; 
   }
-
-  printf("Count is: %d\n", count);
   
-  get_output_image(output_image, array_2d1);
-
+  
+  if (test_amount % 2 == 0) {
+    get_output_image(output_image, array_2d1);
+  } else {
+    get_output_image(output_image, array_2d2);
+  }
+  
+  
   //Save image to file
-  write_bitmap(output_image, argv[2]);
+  write_bitmap(input_image, argv[2]);
+  
+  printf("Count is: %d\n", count);
 
-  printf("Done!\n");
+
+  printf("Done!");
   return 0;
 }
