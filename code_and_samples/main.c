@@ -7,111 +7,199 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "cbmp.h"
+#include <stdbool.h>
 
-unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH];
-unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH];
+  unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
+  unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
+  unsigned char binary_image[BMP_WIDTH][BMP_HEIGTH];
+  unsigned char erosion_image[BMP_WIDTH][BMP_HEIGTH];
+  int cell_count = 0;
+  int grayscale_increment = 50 ;
+  bool white_found = false ;
 
-unsigned char binary_threshold(unsigned char gray_px, unsigned char threshold) {
-  if (gray_px >= threshold) {
-    return 255;
-  } else {
-    return 0;
+  typedef struct {
+    int x;
+    int y;
+  } cell_locations ;
+
+  cell_locations locations[340] ;
+  cell_locations *p = locations ;
+
+void grayscale(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char binary_image[BMP_WIDTH][BMP_HEIGTH]) {
+  int x = 0 ;
+  int y = 0 ;
+  int offset = 10;          
+  int absolute_min = 40;
+
+  while (y < BMP_HEIGTH/grayscale_increment) {
+    int RGB_total = 0 ;
+    for (int i = x * grayscale_increment ; i < x * grayscale_increment + grayscale_increment ; i++ ) {
+      for (int j = y * grayscale_increment ; j < y * grayscale_increment + grayscale_increment ; j++) {
+        RGB_total += (input_image[i][j][0]+input_image[i][j][1]+input_image[i][j][2])/3 ;
+      }
+    }
+
+    int RGB_average = RGB_total/(grayscale_increment*grayscale_increment) ;
+    for (int i = x * grayscale_increment ; i < x * grayscale_increment + grayscale_increment ; i++ ) {
+      for (int j = y * grayscale_increment ; j < y * grayscale_increment + grayscale_increment ; j++) {
+        int gray_px = (input_image[i][j][0] + input_image[i][j][1] + input_image[i][j][2]) / 3;
+        binary_image[i][j] = (gray_px > RGB_average + offset && gray_px > absolute_min) ? 255 : 0;
+        }
+      }
+    x++ ;
+
+    if (x >= BMP_WIDTH/grayscale_increment) {
+      y++ ;
+      x = 0 ;
+    }
   }
 }
 
-void black_n_white(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH]) {
-  unsigned char th = 90;
-  
-  for (int x = 0; x < BMP_WIDTH; x++) 
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++) 
-    {
-      unsigned char gray_px = (input_image[x][y][0] + input_image[x][y][1] + input_image[x][y][2]) / 3;
-      if (gray_px >= th) {
-        array_2d1[x][y] = 255;
+void erode(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH], unsigned char output_image[BMP_WIDTH][BMP_HEIGTH]) {
+  for (int x = 0; x < BMP_WIDTH; x++) {
+    for (int y = 0; y < BMP_HEIGTH; y++) {
+      unsigned char result = input_image[x][y]; // start from the actual pixel, not from nothing
+
+      if (result == 255) {
+        for (int dx = -1; dx <= 1; dx++) {
+          if (dx == 0) continue;
+          int nx = x + dx;
+          if (nx < 0 || nx >= BMP_WIDTH || input_image[nx][y] == 0) {
+            result = 0;
+          }
+        }
+        for (int dy = -1; dy <= 1; dy++) {
+          if (dy == 0) continue;
+          int ny = y + dy;
+          if (ny < 0 || ny >= BMP_HEIGTH || input_image[x][ny] == 0) {
+            result = 0;
+          }
+        }
       }
-      else {
-        array_2d1[x][y] = 0;
+
+      output_image[x][y] = result;
+      if (result == 255) {
+        white_found = true;
       }
     }
   }
 }
 
-void erode1(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH]) {
-  for (int x = 0; x < BMP_WIDTH; x++)
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++)
-    {
-      int left  = (x > 0) ? array_2d1[x-1][y] : 0;
-      int right = (x < BMP_WIDTH-1) ? array_2d1[x+1][y] : 0;
-      int up    = (y > 0) ? array_2d1[x][y-1] : 0;
-      int down  = (y < BMP_HEIGTH-1) ? array_2d1[x][y+1] : 0;
-      
-      if (array_2d1[x][y] && left && right && up && down) {
-        array_2d2[x][y] = 255;
-      } else {
-        array_2d2[x][y] = 0;
-      }
-    }
-  }
-}
+void detection(unsigned char binary_image[BMP_WIDTH][BMP_HEIGTH], cell_locations *f) {
+  int x = 0 ;
+  int y = 0 ;
+  int detection_length = 13 ;
+  int RMP = detection_length ;
+  int TMP = detection_length ;
 
-void erode2(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH], unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH], int *count) {
-  for (int x = 0; x < BMP_WIDTH; x++)
+  while (y <= BMP_HEIGTH-detection_length) 
   {
-    for (int y = 0; y < BMP_HEIGTH; y++)
+    int new_RMP = detection_length ;
+    int new_TMP = detection_length ;
+    bool border_clear = 1 ;
+    bool center_full = 0 ;
+    for (int dy = 0 ; dy <= detection_length ; dy++) 
     {
-      int left  = (x > 0) ? array_2d2[x-1][y] : 0;
-      int right = (x < BMP_WIDTH-1) ? array_2d2[x+1][y] : 0;
-      int up    = (y > 0) ? array_2d2[x][y-1] : 0;
-      int down  = (y < BMP_HEIGTH-1) ? array_2d2[x][y+1] : 0;
-      
-      if (array_2d2[x][y] && left && right && up && down) {
-        array_2d1[x][y] = 255;
-      } 
-      else if (array_2d2[x][y] && !left && !right && !up && !down) 
+      for (int dx = 0 ; dx <= detection_length ; dx++) 
       {
-        array_2d1[x][y] = 0;
-        (*count)++;
-      } else {
-        array_2d1[x][y] = 0;
+        if (binary_image[x+dx][y+dy] == 255) 
+        {
+          if (dx == 0 || dx == detection_length || dy == 0 || dy == detection_length) 
+          {
+            border_clear = 0 ;
+          } else {
+            center_full = 1 ;
+          }
+          if (new_RMP > dx) {
+            if (dx - 1 > 1) {
+              new_RMP = dx - 1 ;
+            } else {
+              new_RMP = 1 ;
+            }
+          }
+
+          if (new_TMP > dy && dy > 1) {
+            if (dy - 1 > 1) {
+               new_TMP = dy - 1 ;
+            } else {
+              new_TMP = 1 ;
+            }
+          }
+        }
       }
+    }
+    if (border_clear == 1 && center_full == 1) {
+      cell_count++ ;
+      new_TMP = detection_length ;
+      new_RMP = detection_length ;
+      p->x = x+detection_length/2 ;
+      p->y = y+detection_length/2 ;
+      p++ ;
+      for (int yy = 1 ; yy <= detection_length - 1 ; yy++ ) 
+      {
+        for (int xx = 1 ; xx <= detection_length - 1 ; xx++) 
+        {
+          binary_image[x+xx][y+yy] = 0 ;
+        }
+      }
+    }
+
+    if (new_RMP < RMP) {
+      RMP = new_RMP ;
+    }
+
+    if (new_TMP < TMP) {
+      TMP = new_TMP ;
+    }
+
+    if (x == BMP_WIDTH - detection_length) {
+      if (y == BMP_HEIGTH - detection_length) {
+        break ; 
+      }
+      x = 0 ;
+      y += TMP ;
+      if (y > BMP_HEIGTH - detection_length) {
+        y = BMP_HEIGTH - detection_length ;
+      }
+      TMP = detection_length ;
+    } else {
+      x += RMP ;
+      if (x > BMP_WIDTH - detection_length) {
+        x = BMP_WIDTH - detection_length ;
+      }
+      RMP = detection_length ;
     }
   }
 }
 
-void detection(unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
-  int detection_width = 12+2;
-  int detection_height = 12+2;
-  int c = 0;
-
-  
-  
-  for (int x = 0+c; x < BMP_WIDTH-detection_width; x++) {
-    for (int y = 0+c; y < BMP_HEIGTH-detection_height; y++) {
-      for (int w = x; w < 14+x; w++) {
-        for (int h = y; h < 14+y; w++) {
-          if (h == x && array_2d1[])
+void mark_cells(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], const cell_locations *f) {
+  for (int i = 0; i < cell_count; i++) {
+    for (int width = -1; width < 2; width++) {
+      for (int dy = -10; dy <= 10; dy++) {
+        int px = locations[i].x + width;
+        int py = locations[i].y + dy;
+        if (px >= 0 && px < BMP_WIDTH && py >= 0 && py < BMP_HEIGTH) {
+          input_image[px][py][0] = 255;
+          input_image[px][py][1] = 0;
+          input_image[px][py][2] = 0;
+        }
+      }
+    }
+    for (int width = -1; width < 2; width++) {
+      for (int dx = -10; dx <= 10; dx++) {
+        int px = locations[i].x + dx;
+        int py = locations[i].y + width;
+        if (px >= 0 && px < BMP_WIDTH && py >= 0 && py < BMP_HEIGTH) {
+          input_image[px][py][0] = 255;
+          input_image[px][py][1] = 0;
+          input_image[px][py][2] = 0;
         }
       }
     }
   }
 }
 
-void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
-  for (int x = 0; x < BMP_WIDTH; x++)
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++)
-    {
-      for (int c = 0; c < BMP_CHANNELS; c++) {
-        output_image[x][y][c] = array_2d1[x][y];
-      }
-    }
-  }
-}
   //Declaring the array to store the image (unsigned char = unsigned 8 bit)
-  unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
-  unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
 
 //Main function
 int main(int argc, char** argv)
@@ -130,33 +218,34 @@ int main(int argc, char** argv)
 
   printf("Example program - 02132 - A1\n");
 
-  //Load image from file
   read_bitmap(argv[1], input_image);
 
-  //Run inversion
-  //invert(input_image,output_image);
+  grayscale(input_image, binary_image);
 
-  //Gray_scale and apply binary threshold
-  black_n_white(input_image, array_2d1, array_2d2);
-
-  //Erode image
-  int count = 0;
-
-  for (int test = 0; test < 12; test++) {
-    if (test % 2 == 0) {
-      erode1(array_2d1, array_2d2);
+  bool cells_left = true ;
+  while (cells_left) {
+    erode(binary_image, erosion_image) ;
+    if (white_found == false ) {
+       cells_left = false ;
     }
-    else {
-      erode2(array_2d1, array_2d2, &count);
+    white_found = false ;
+
+    detection(erosion_image, locations) ;    
+
+    erode(erosion_image, binary_image) ;
+    if (white_found == false) {
+       cells_left = false ;
     }
+    white_found = false ;
+
+    detection(binary_image, locations) ;
   }
 
-  printf("Count is: %d\n", count);
+  mark_cells(input_image, locations) ;
+  printf("Cells found: ") ;
+  printf("%d\n", cell_count) ;
   
-  get_output_image(output_image, array_2d1);
-
-  //Save image to file
-  write_bitmap(output_image, argv[2]);
+  write_bitmap(input_image, argv[2]);
 
   printf("Done!\n");
   return 0;
