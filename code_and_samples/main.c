@@ -10,51 +10,8 @@
 #include <string.h>
 
 unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
-unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS];
-unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH];
-unsigned char array_2d2[BMP_WIDTH][BMP_HEIGTH];
-int watershed_array[BMP_WIDTH][BMP_HEIGTH];
+unsigned char watershed_array[BMP_WIDTH][BMP_HEIGTH];
 
-void black_n_white(unsigned char input_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char array_2d1[BMP_WIDTH][BMP_HEIGTH]) {
-  unsigned char th = 95;
-  
-  for (int x = 0; x < BMP_WIDTH; x++) 
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++) 
-    {
-      unsigned char gray_px = (input_image[x][y][0] + input_image[x][y][1] + input_image[x][y][2]) / 3;
-      if (gray_px >= th) {
-        array_2d1[x][y] = 255;
-      }
-      else {
-        array_2d1[x][y] = 0;
-      }
-    }
-  }
-}
-
-void erode(unsigned char in[BMP_WIDTH][BMP_HEIGTH], unsigned char out[BMP_WIDTH][BMP_HEIGTH]) {
-  for (int x = 0; x < BMP_WIDTH; x++)
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++)
-    {
-      //Makes sure to stay within bounds
-      int left  = (x > 0) ? in[x-1][y] : 0;
-      int right = (x < BMP_WIDTH-1) ? in[x+1][y] : 0;
-      int up    = (y > 0) ? in[x][y-1] : 0;
-      int down  = (y < BMP_HEIGTH-1) ? in[x][y+1] : 0;
-      
-      if (in[x][y] && left && right && up && down) {
-        out[x][y] = 255;
-      } else {
-        out[x][y] = 0;
-      }
-    }
-  }
-}
-
-
-//Draws cross
 void cross(int x, int y) {
   int thickness = 1; 
 
@@ -78,84 +35,10 @@ void cross(int x, int y) {
   }
 }
 
-/*
-void detection(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count, int *end) {
-  int detection_length = 14;
-  int toppoint = 0;
-  int rightpoint = 0;
-  
-  
-  int new_tp = detection_length;
-  int exclude = 0;
-  int detected = 0;
-  int end_checker = 1;
-  
-  
-  while (1) {
-
-    for (int x = rightpoint; x < (rightpoint + detection_length); x++) {
-      for (int y = toppoint; y < (toppoint + detection_length); y++) {
-        if (in[x][y]) {
-          detected = 1;
-          end_checker = 0;
-        }
-
-        //Exclution-frame
-        if ((x == rightpoint || x == rightpoint + detection_length-1 || y == toppoint || y == toppoint + detection_length-1) && in[x][y]) {
-          exclude = 1;
-          end_checker = 0;
-          break;
-        }
-      }
-      if (exclude) {
-        break;
-      }
-    }
-
-    //Draw black square over detected element
-    if (!exclude && detected) {
-      //change arrays bits within detection_length to 0000
-      for (int k = rightpoint; k < rightpoint + detection_length; k++) {
-        memset(in[k] + toppoint, 0, (detection_length+2)*sizeof(unsigned char));
-      }
-      
-      cross(rightpoint+(detection_length/2), toppoint+(detection_length/2));
-
-      (*count)++;
-    }
-
-    //Checks if detecter is at the end.
-    if (toppoint == BMP_HEIGTH - detection_length && rightpoint == BMP_WIDTH - detection_length) {
-      //Ends program if there were no white pixels
-      if (end_checker) {
-        *end = 0;
-      }
-      break;
-    }
-
-    //Goes down 1 step if detection-square is all the way to the right
-    if (rightpoint >= BMP_WIDTH - detection_length) {
-      rightpoint = 0;
-
-      //toppoint = new_tp;
-      toppoint += 1;
-
-    } else if (exclude == 0 && detected == 0) { //if no white detected within square, jump a squares distance.
-      rightpoint = ((rightpoint + detection_length) > (BMP_WIDTH - detection_length)) ? (BMP_WIDTH - detection_length) : (rightpoint + (detection_length/2)); 
-    } else {
-      rightpoint += 1;
-    }
-
-    exclude = 0;
-    detected = 0;
-  }
-}
-*/
-
-void watershed(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int ws[BMP_WIDTH][BMP_HEIGTH]) {
+void watershed(unsigned char in[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char ws[BMP_WIDTH][BMP_HEIGTH]) {
   for (int x = 0; x < BMP_WIDTH; x++) {
     for (int y = 0; y < BMP_HEIGTH; y++) {
-      if (!in[x][y]) {
+      if ((in[x][y][0]+in[x][y][1]+in[x][y][2])/ 3 < 95) {
         ws[x][y] = 0;
       } else {
         int l  = (x > 0) ? ws[x-1][y] : 0;
@@ -171,10 +54,10 @@ void watershed(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int ws[BMP_WIDTH][BMP_HE
   }
 }
 
-void watershed_reverse(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int ws[BMP_WIDTH][BMP_HEIGTH]) {
+void watershed_reverse(unsigned char in[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char ws[BMP_WIDTH][BMP_HEIGTH]) {
   for (int x = BMP_WIDTH-1; x >= 0; x--) {
     for (int y = BMP_HEIGTH-1; y >= 0; y--) {
-      if (!in[x][y]) {
+      if ((in[x][y][0]+in[x][y][1]+in[x][y][2])/ 3 < 95) {
         ws[x][y] = 0;
       } else {
         int r  = (x < BMP_WIDTH-1) ? ws[x+1][y] : 0;
@@ -194,7 +77,7 @@ void watershed_reverse(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int ws[BMP_WIDTH
   }
 }
 
-void find_peaks(int in[BMP_WIDTH][BMP_HEIGTH], int *count) {
+void find_peaks(unsigned char in[BMP_WIDTH][BMP_HEIGTH], int *count) {
   int maxv = 0;
   for (int x = 0; x < BMP_WIDTH; x++)
     for (int y = 0; y < BMP_HEIGTH; y++)
@@ -236,22 +119,6 @@ void find_peaks(int in[BMP_WIDTH][BMP_HEIGTH], int *count) {
   }
 }
 
-void get_output_image(unsigned char output_image[BMP_WIDTH][BMP_HEIGTH][BMP_CHANNELS], unsigned char in[BMP_WIDTH][BMP_HEIGTH]) {
-  for (int x = 0; x < BMP_WIDTH; x++)
-  {
-    for (int y = 0; y < BMP_HEIGTH; y++)
-    {
-      for (int c = 0; c < BMP_CHANNELS; c++) {
-        output_image[x][y][c] = in[x][y];
-      }
-    }
-  }
-}
-
-  //Declaring the array to store the image (unsigned char = unsigned 8 bit)
-
-
-//Main function
 int main(int argc, char** argv)
 {
   //argc counts how may arguments are passed
@@ -268,59 +135,15 @@ int main(int argc, char** argv)
 
   printf("Example program - 02132 - A1\n");
 
-  //Load image from file
   read_bitmap(argv[1], input_image);
 
-  //Run inversion
-  //invert(input_image,output_image);
-
-  //Gray_scale and apply binary threshold
-  black_n_white(input_image, array_2d1);
-
   int count = 0;
 
-  watershed(array_2d1, watershed_array);
-  watershed_reverse(array_2d1, watershed_array);
+  watershed(input_image, watershed_array);
+  watershed_reverse(input_image, watershed_array);
   find_peaks(watershed_array, &count);
 
-
-  /*
-  //Erode image
-  int count = 0;
-  int end = 1;
-  int test_amount = 0;
-
-  while (end) {
-    
-    if (test_amount % 2 == 0) {
-      erode(array_2d1, array_2d2);
-      detection(array_2d2, &count, &end);
-    }
-    else {
-      erode(array_2d2, array_2d1);
-      detection(array_2d1, &count, &end);
-    }
-    
-    test_amount++; 
-    
-    //if (test_amount == 8) {
-    //  break;
-    //}
-  }
-  
-  //Bug testing
-  if (test_amount % 2 == 0) {
-    get_output_image(output_image, array_2d1);
-  } else {
-    get_output_image(output_image, array_2d2);
-  }
-  */
-  
-  get_output_image(output_image, array_2d1);
-
-  //Save image to file
   write_bitmap(input_image, argv[2]);
-  //write_bitmap(output_image, argv[2]);
   
   printf("Count is: %d\n", count);
 
